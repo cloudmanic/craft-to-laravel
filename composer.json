@@ -1,0 +1,21 @@
+{
+    "name": "cloudmanic/craft-to-laravel",
+    
+    
+    "description": "This is a library to make getting data out of a CraftCMS (https://craftcms.com) easy from a Laravel App.",
+    
+    "require": {
+        "laravel/framework": "5.*.*"
+    },
+    
+    "authors": [
+        {
+            "name": "Spicer Matthews",
+            "email": "github@cloudmanic.com"
+        }
+    ],
+    
+		"autoload": {
+    	"psr-4": {"Cloudmanic\\Craft2Laravel\\": "src/"}
+		}    
+}
