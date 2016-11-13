@@ -6,6 +6,7 @@ use DB;
 	
 class Craft2Laravel 
 {
+	private $_wheres = [];
 	private $_db_connection = 'mysql';
 	
 	//
@@ -17,26 +18,55 @@ class Craft2Laravel
 	}
 	
 	//
+	// Add where clause
+	//
+	public function add_where($key, $value, $type = '=')
+	{
+		$this->_wheres[] = [ 'key' => $key, 'value' => $value, 'type' => $type ];
+	}
+	
+	//
+	// Get entry by slug
+	//
+	public function get_entry_by_slug($entry_type = '', $slug)
+	{
+		$this->add_where('craft_elements_i18n.slug', $slug);
+		$entries = $this->get_entries($entry_type, 1);
+		return (isset($entries[0])) ? $entries[0] : false;
+	}
+	
+	//
 	// Return entries
 	//
 	public function get_entries($entry_type = '', $limit = 1000000, $offset = 0, $order_by = 'postDate', $sort_by = 'desc')
 	{
+		$db = DB::connection($this->_db_connection)->table('craft_entries');
+		
 		// Query the entries table.
-		$content = DB::connection($this->_db_connection)
-		              ->table('craft_entries')
-		              ->select('craft_content.*', 'craft_elements.enabled', 'craft_users.username', 'craft_users.firstName',
+		$db->select('craft_content.*', 'craft_elements.enabled', 'craft_users.username', 'craft_users.firstName',
 		              					'craft_users.lastName', 'craft_elements.id AS element_id', 'craft_entries.postDate', 
-		              					'craft_elements_i18n.slug AS slug')
-		              ->join('craft_content', 'craft_entries.id', '=', 'craft_content.id')
-		              ->join('craft_entrytypes', 'craft_entries.typeId', '=', 'craft_entrytypes.id')
-		              ->join('craft_elements', 'craft_content.elementId', '=', 'craft_elements.id')                
-		              ->join('craft_users', 'craft_entries.authorId', '=', 'craft_users.id')
-		              ->join('craft_elements_i18n', 'craft_elements.id', '=', 'craft_elements_i18n.elementId')  
-		              ->where('craft_entrytypes.handle', $entry_type)
-		              ->orderBy($order_by, 'desc')
-		              ->limit($limit)
-		              ->offset($offset)
-		              ->get();
+		              					'craft_elements_i18n.slug AS slug');
+		              					
+		$db->join('craft_content', 'craft_entries.id', '=', 'craft_content.id');
+		$db->join('craft_entrytypes', 'craft_entries.typeId', '=', 'craft_entrytypes.id');
+		$db->join('craft_elements', 'craft_content.elementId', '=', 'craft_elements.id');                
+		$db->join('craft_users', 'craft_entries.authorId', '=', 'craft_users.id');
+		$db->join('craft_elements_i18n', 'craft_elements.id', '=', 'craft_elements_i18n.elementId');  
+		$db->where('craft_entrytypes.handle', $entry_type);
+		
+		// Add in custom wheres
+		foreach($this->_wheres AS $key => $row)
+		{
+			$db->where($row['key'], $row['type'], $row['value']);
+		}
+		
+		// Clear wheres
+		$this->_wheres = [];
+		
+		$db->orderBy($order_by, 'desc');
+		$db->limit($limit);
+		$db->offset($offset);
+		$content = $db->get();
 		
 		// Add in relation data.
 		foreach($content AS $key => $row)
@@ -75,6 +105,41 @@ class Craft2Laravel
 		
 		// Return the data.
 		return $content;
+	}
+	
+	//
+	// Get an asset by id
+	//
+	public function get_asset_by_id($id)
+	{
+		$db = DB::connection($this->_db_connection)->table('craft_assetfiles')
+						->select('craft_assetfiles.*', 'craft_assetsources.settings')
+						->join('craft_assetsources', 'craft_assetfiles.sourceId', '=', 'craft_assetsources.id') 
+						->where('craft_assetfiles.id', $id);
+		
+		// Decode settings.
+		if($data = $db->first())
+		{
+			if(isset($data->settings))
+			{
+				$data->settings = json_decode($data->settings);
+			}
+			
+			// Build the full url.
+			$data->fullUrl = $data->settings->urlPrefix . $data->settings->subfolder . $data->filename;
+		}
+		
+		return $data;
+	}
+	
+	// ------------------- Private Helper Functions -------------------- //
+	
+	//
+	// Get db connection.
+	//
+	private function _get_db()
+	{
+		return DB::connection($this->_db_connection);
 	}
 }
 
